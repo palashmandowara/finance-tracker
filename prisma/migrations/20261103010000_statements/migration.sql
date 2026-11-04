@@ -1,0 +1,10 @@
+ALTER TABLE "Transaction" ADD COLUMN "reference" VARCHAR(120);
+CREATE TABLE "Transfer" ("id" TEXT PRIMARY KEY,"userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"fromId" TEXT NOT NULL,"toId" TEXT NOT NULL,"amount" INTEGER NOT NULL CHECK ("amount">0),"date" DATE NOT NULL,"description" TEXT NOT NULL,"reference" VARCHAR(120),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "Transfer_distinct" CHECK ("fromId"<>"toId"),FOREIGN KEY ("fromId","userId") REFERENCES "FinancialAccount"("id","userId") ON DELETE RESTRICT,FOREIGN KEY ("toId","userId") REFERENCES "FinancialAccount"("id","userId") ON DELETE RESTRICT);
+CREATE INDEX "Transfer_userId_date_idx" ON "Transfer"("userId","date");
+CREATE INDEX "Transfer_fromId_userId_idx" ON "Transfer"("fromId","userId");
+CREATE INDEX "Transfer_toId_userId_idx" ON "Transfer"("toId","userId");
+CREATE TABLE "ImportBatch" ("id" TEXT PRIMARY KEY,"userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"data" JSONB NOT NULL,"result" JSONB,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX "ImportBatch_userId_idx" ON "ImportBatch"("userId");
+CREATE TABLE "MerchantRule" ("id" TEXT PRIMARY KEY,"userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"keyword" TEXT NOT NULL,"categoryId" TEXT NOT NULL,"type" "TransactionType" NOT NULL,FOREIGN KEY ("categoryId","userId","type") REFERENCES "Category"("id","userId","type") ON DELETE RESTRICT);
+CREATE UNIQUE INDEX "MerchantRule_userId_keyword_type_key" ON "MerchantRule"("userId","keyword","type");
+CREATE INDEX "MerchantRule_categoryId_userId_type_idx" ON "MerchantRule"("categoryId","userId","type");

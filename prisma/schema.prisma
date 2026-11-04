@@ -1,0 +1,327 @@
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+}
+datasource db {
+  provider = "postgresql"
+}
+model User {
+  merchantClassifications MerchantClassification[]
+  subscriptions Subscription[]
+  dismissals SubscriptionDismissal[]
+  bills Bill[]
+  billOccurrences BillOccurrence[]
+  billPayments BillPayment[]
+  id String @id
+  name String
+  email String @unique
+  emailVerified Boolean @default(false)
+  image String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions Session[]
+  accounts Account[]
+  financialAccounts FinancialAccount[]
+  categories Category[]
+  transactions Transaction[]
+  budgets Budget[]
+  goals SavingsGoal[]
+  transfers Transfer[]
+  importBatches ImportBatch[]
+  merchantRules MerchantRule[]
+  contributions GoalContribution[]
+}
+model Session {
+  id String @id
+  expiresAt DateTime
+  token String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+model Account {
+  id String @id
+  accountId String
+  providerId String
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken String?
+  refreshToken String?
+  idToken String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope String?
+  password String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId])
+}
+model Verification {
+  id String @id
+  identifier String
+  value String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([identifier])
+}
+enum AccountType {
+  BANK
+  CASH
+  WALLET
+  CREDIT_CARD
+}
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+model FinancialAccount {
+  sliceEntries SliceEntry[]
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  type AccountType
+  openingBalance Int
+  createdAt DateTime @default(now())
+  transactions Transaction[]
+  outgoing Transfer[] @relation("TransferFrom")
+  incoming Transfer[] @relation("TransferTo")
+  @@unique([id, userId])
+  @@unique([userId, name])
+}
+model Category {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  type TransactionType
+  transactions Transaction[]
+  budgets Budget[]
+  merchantRules MerchantRule[]
+  @@unique([id, userId, type])
+  @@unique([userId, name, type])
+}
+
+model Budget {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month String @db.VarChar(7)
+  scope String
+  categoryId String?
+  categoryType TransactionType @default(EXPENSE)
+  category Category? @relation(fields: [categoryId, userId, categoryType], references: [id, userId, type], onDelete: Restrict)
+  amount Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, month, scope])
+  @@index([categoryId, userId, categoryType])
+}
+
+model SavingsGoal {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  target Int
+  deadline DateTime? @db.Date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  contributions GoalContribution[]
+  @@unique([id, userId])
+  @@index([userId, createdAt])
+}
+
+model GoalContribution {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId String
+  goal SavingsGoal @relation(fields: [goalId, userId], references: [id, userId], onDelete: Cascade)
+  amount Int
+  createdAt DateTime @default(now())
+  @@index([goalId, userId])
+}
+model Transaction {
+  classification Json?
+  accountingEffect String?
+  reversalOfId String? @unique
+  reversalOf Transaction? @relation("ExpenseReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal Transaction? @relation("ExpenseReversal")
+  sourceOrder Int?
+  sliceEntries SliceEntry[]
+  billPayments BillPayment[]
+  reference String? @db.VarChar(500)
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId String
+  account FinancialAccount @relation(fields: [accountId, userId], references: [id, userId], onDelete: Restrict)
+  categoryId String
+  category Category @relation(fields: [categoryId, userId, type], references: [id, userId, type], onDelete: Restrict)
+  type TransactionType
+  amount Int
+  description String
+  date DateTime @db.Date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, date])
+  @@index([accountId, userId])
+  @@index([categoryId, userId, type])
+}
+
+model Transfer {
+  sourceOrder Int?
+  sliceEntries SliceEntry[]
+  billPayments BillPayment[]
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ fromId String
+ toId String
+ from FinancialAccount @relation("TransferFrom",fields:[fromId,userId],references:[id,userId],onDelete:Restrict)
+ to FinancialAccount @relation("TransferTo",fields:[toId,userId],references:[id,userId],onDelete:Restrict)
+ amount Int
+ date DateTime @db.Date
+ description String
+ reference String? @db.VarChar(500)
+ createdAt DateTime @default(now())
+ @@index([userId,date])
+ @@index([fromId,userId])
+ @@index([toId,userId])
+}
+model ImportBatch {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ data Json
+ result Json?
+ createdAt DateTime @default(now())
+ @@index([userId])
+}
+model MerchantRule {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ keyword String
+ categoryId String
+ type TransactionType
+ category Category @relation(fields:[categoryId,userId,type],references:[id,userId,type],onDelete:Restrict)
+ @@unique([userId,keyword,type])
+ @@index([categoryId,userId,type])
+}
+
+model Subscription {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ name String
+ merchant String
+ amount Int
+ frequency String
+ nextRenewal DateTime @db.Date
+ accountId String?
+ categoryId String?
+ paused Boolean @default(false)
+ createdAt DateTime @default(now())
+ bill Bill?
+ @@index([userId])
+}
+model SubscriptionDismissal {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ merchant String
+ @@unique([userId,merchant])
+}
+model Bill {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ title String
+ amount Int
+ kind String
+ accountId String?
+ recurrence String
+ startDate DateTime @db.Date
+ paused Boolean @default(false)
+ subscriptionId String? @unique
+ subscription Subscription? @relation(fields:[subscriptionId],references:[id],onDelete:SetNull)
+ occurrences BillOccurrence[]
+ @@index([userId])
+}
+model BillOccurrence {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ billId String
+ bill Bill @relation(fields:[billId],references:[id],onDelete:Cascade)
+ title String
+ kind String
+ amount Int
+ accountId String?
+ scheduledDate DateTime @db.Date
+ dueDate DateTime @db.Date
+ cancelled Boolean @default(false)
+ payments BillPayment[]
+ @@unique([billId,scheduledDate])
+ @@index([userId,dueDate])
+}
+model BillPayment {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ occurrenceId String
+ occurrence BillOccurrence @relation(fields:[occurrenceId],references:[id],onDelete:Cascade)
+ transactionId String? @unique
+ transaction Transaction? @relation(fields:[transactionId],references:[id],onDelete:SetNull)
+ transferId String? @unique
+ transfer Transfer? @relation(fields:[transferId],references:[id],onDelete:SetNull)
+ recordId String
+ amount Int
+ paymentDate DateTime @db.Date
+ valid Boolean @default(true)
+ note String
+ createdAt DateTime @default(now())
+ @@index([occurrenceId])
+ @@index([userId])
+}
+
+// Import provenance is retained without customer/account metadata or the raw workbook.
+model SliceEntry {
+ source Json?
+ id String @id @default(cuid())
+ userId String
+ accountId String
+ account FinancialAccount @relation(fields:[accountId,userId],references:[id,userId],onDelete:Cascade)
+ key String
+ sourceOrder Int
+ balance Int
+ date DateTime @db.Date
+ transactionId String?
+ transaction Transaction? @relation(fields:[transactionId],references:[id],onDelete:Cascade)
+ transferId String?
+ transfer Transfer? @relation(fields:[transferId],references:[id],onDelete:Cascade)
+ @@unique([userId,accountId,key])
+ @@index([transactionId])
+ @@index([transferId])
+}
+
+model MerchantClassification {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ identity String
+ direction String
+ merchant String
+ kind String
+ categoryId String
+ subcategory String
+ effect String
+ @@unique([userId,identity,direction])
+}
