@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: finance
+          POSTGRES_PASSWORD: finance
+          POSTGRES_DB: finance_tracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U finance -d finance_tracker"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgresql://finance:finance@localhost:5432/finance_tracker
+      BETTER_AUTH_SECRET: ci-only-secret-with-at-least-32-characters
+      BETTER_AUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:migrate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:smoke
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: finance
+          POSTGRES_PASSWORD: finance
+          POSTGRES_DB: finance_tracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U finance -d finance_tracker"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgresql://finance:finance@localhost:5432/finance_tracker
+      BETTER_AUTH_SECRET: ci-only-secret-with-at-least-32-characters
+      BETTER_AUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:migrate
+      - run: npm run build
+      - name: Write CI environment
+        run: |
+          printf 'DATABASE_URL=%s\nBETTER_AUTH_SECRET=%s\nBETTER_AUTH_URL=%s\n' "$DATABASE_URL" "$BETTER_AUTH_SECRET" "$BETTER_AUTH_URL" > .env
+      - run: npx playwright install --with-deps msedge
+      - run: npm run dev > /tmp/finance-tracker.log 2>&1 &
+      - run: |
+          for attempt in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:3000/login >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/finance-tracker.log
+          exit 1
+      - run: npm run test:e2e
+      - if: failure()
+        run: cat /tmp/finance-tracker.log

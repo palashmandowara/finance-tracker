@@ -21,6 +21,7 @@ type Stored = {
   headers: string[];
   rows: string[][];
   accountId?: string;
+  mapping?: Mapping;
   preview?: ReviewRow[];
 };
 type Report = {
@@ -39,6 +40,15 @@ export async function uploadStatement(form: FormData) {
   try {
     const data = await readStatement(file);
     const user = await requireUser();
+    // Remove abandoned parsed statements during normal user activity. Parsed bank
+    // rows are sensitive and should not remain indefinitely if a user abandons an import.
+    await getDb().importBatch.deleteMany({
+      where: {
+        userId: user.id,
+        result: { equals: Prisma.DbNull },
+        createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+    });
     const batch = await getDb().importBatch.create({
       data: { userId: user.id, data: json(data) },
     });
@@ -175,7 +185,7 @@ export async function previewStatement(
   }
   await db.importBatch.updateMany({
     where: { id, userId: user.id, result: { equals: Prisma.DbNull } },
-    data: { data: json({ ...stored, accountId, preview: rows }) },
+    data: { data: json({ ...stored, accountId, mapping: parsed.data, preview: rows }) },
   });
   return { rows };
 }
@@ -206,6 +216,7 @@ export async function confirmStatement(
         if (
           !stored.accountId ||
           !stored.preview ||
+          !stored.mapping ||
           rows.length !== stored.preview.length ||
           new Set(rows.map((r) => r.index)).size !== rows.length ||
           rows.some((r, i) => r.index !== i)
@@ -256,8 +267,26 @@ export async function confirmStatement(
           reconciled: 0,
           messages: [],
         };
-        for (const row of rows) {
-          if (stored.preview[row.index].blocked || row.decision === "SKIP") {
+        // Rebuild financial fields from the stored upload and mapping. The browser
+        // may submit user decisions, but cannot rewrite amount/date/type/description
+        // after the preview has been shown.
+        const submitted = new Map(rows.map((row) => [row.index, row]));
+        const confirmedRows = stored.rows.map((cells, index) => {
+          const expected = parseStatementRow(cells, index, stored.mapping!);
+          const choice = submitted.get(index);
+          return {
+            ...expected,
+            categoryId: choice?.categoryId ?? "",
+            kind: choice?.kind ?? expected.kind,
+            otherId: choice?.otherId ?? "",
+            decision: choice?.decision ?? expected.decision,
+            remember: choice?.remember ?? false,
+            keyword: choice?.keyword ?? "",
+            matches: expected.matches,
+          };
+        });
+        for (const row of confirmedRows) {
+          if (row.blocked || row.decision === "SKIP") {
             result.skipped++;
             continue;
           }
