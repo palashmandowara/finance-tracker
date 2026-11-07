@@ -111,6 +111,10 @@ The documented verification includes:
 
 The latest implementation notes record **31 unit tests** for the statement and recognition milestone, plus browser and smoke verification across the earlier finance milestones. Run the commands above in your own environment to reproduce the current state.
 
+Pull requests are checked by GitHub Actions with PostgreSQL using the type checker, ESLint,
+unit tests, production build, smoke checks, and a separate Edge browser job. The workflow
+uses isolated CI credentials and never requires personal finance data.
+
 ## Known limitations
 
 - No production host, managed database, monitoring, or CI deployment is included.
