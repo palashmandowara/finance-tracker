@@ -24,7 +24,16 @@ async function register(p: Page, email: string) {
     await p.getByLabel(label, { exact: true }).evaluate((e, v) => {
       (e as HTMLInputElement).value = v;
     }, password);
+  const signUp = p.waitForResponse((response) =>
+    response.url().includes("/api/auth/sign-up/email") && response.request().method() === "POST",
+  );
   await p.getByRole("button", { name: "Create account", exact: true }).click();
+  const response = await signUp;
+  if (response.status() === 429) {
+    const retryAfter = Number(response.headers()["retry-after"] || 60);
+    await p.waitForTimeout((Number.isFinite(retryAfter) ? Math.max(retryAfter, 1) : 60) * 1000);
+    await p.getByRole("button", { name: "Create account", exact: true }).click();
+  }
   await expect(p).toHaveURL(/\/setup$/);
   await p.getByRole("link", { name: "Skip for now" }).click();
   await expect(p).toHaveURL(/\/dashboard$/);
