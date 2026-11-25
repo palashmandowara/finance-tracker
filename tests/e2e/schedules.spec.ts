@@ -423,7 +423,15 @@ test("milestone 4 desktop: schedules, suggestions, calendar, full payments and i
       await expect(
         a.getByText("Linked transfer deleted; payment needs review"),
       ).toBeVisible();
-      await expect(a.locator("main header")).toContainText("Upcoming");
+      const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+      const expectedStatus = today > "2026-11-05" ? "Overdue" :
+        today === "2026-11-05" ? "Due today" : "Upcoming";
+      await expect(a.locator("main header")).toContainText(expectedStatus);
     });
     await test.step("foreign reads, mutation replay and mismatched payment links are rejected", async () => {
       await register(b, emails[1]);
