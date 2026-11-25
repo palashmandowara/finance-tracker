@@ -48,6 +48,17 @@ The main code is organized as:
 - `tests/`: unit, smoke, and Playwright browser coverage
 - `design/`: brand specification and fictional preview assets
 
+### Database and import design
+
+- [Prisma schema](prisma/schema.prisma) defines finance records, user-scoped uniqueness,
+  composite relations and indexes for account, category, and date-based queries.
+- [Statement import actions](src/app/statement-actions.ts) validate and scope records to
+  the signed-in user and confirm imports inside a database transaction.
+- [Slice import service](src/lib/slice-service.ts) locks the user and selected account
+  during confirmation, rechecks the preview and preserves import provenance.
+- [Statement parser](src/lib/statement-files.ts) bounds input and expanded workbook size;
+  [tests](tests/statements.test.ts) exercise dates, exact amounts, duplicates and CSV safety.
+
 ## Run locally
 
 Requirements:
@@ -122,7 +133,7 @@ uses isolated CI credentials and never requires personal finance data.
 - Subscription renewal dates are estimates and do not charge users.
 - Statement classification is evidence-based and finite; unknown or ambiguous merchants require review.
 - The app does not provide bank connections, SMS/email notifications, payment execution, or investment advice.
-- The dependency audit still reports moderate findings in ExcelJS and development lint dependency chains. Do not run `npm audit fix --force`; review upstream fixes before deploying.
+- On 25 November 2026, `npm audit --omit=dev` reported 3 high findings in the Prisma/config/Effect dependency chain and 2 moderate findings in the ExcelJS/uuid chain. These are audit-reported dependency nodes, not a demonstrated exploit of this application. Check current advisories and affected code paths before deployment; avoid forcing major-version changes without testing.
 - Personal statement files must remain outside the repository.
 
 ## Resume description

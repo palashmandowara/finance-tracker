@@ -160,7 +160,19 @@ test("milestone: authentication, real balances, CRUD, filters, and two-user isol
       await expect(a).toHaveURL(/\/login$/);
       await a.getByLabel("Email address").fill(emails[0]);
       await enterPassword(a);
+      const signIn = a.waitForResponse((response) =>
+        response.url().includes("/api/auth/sign-in/email") && response.request().method() === "POST",
+      );
       await a.getByRole("button", { name: "Log in", exact: true }).click();
+      const response = await signIn;
+      if (response.status() === 429) {
+        // Other scenarios share the CI runner's IP. Preserve production rate limits
+        // and retry only after the server's rate-limit window has elapsed.
+        const retryAfter = Number(response.headers()["retry-after"] || 60);
+        await a.waitForTimeout((Number.isFinite(retryAfter) ? Math.max(retryAfter, 1) : 60) * 1000);
+        await enterPassword(a);
+        await a.getByRole("button", { name: "Log in", exact: true }).click();
+      }
       await expect(a).toHaveURL(/\/dashboard$/);
     });
     await test.step("Create accounts, categories, income, and expense; verify ₹6,500", async () => {

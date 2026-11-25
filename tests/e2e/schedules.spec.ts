@@ -24,7 +24,16 @@ async function register(p: Page, email: string) {
     await p.getByLabel(label, { exact: true }).evaluate((e, v) => {
       (e as HTMLInputElement).value = v;
     }, password);
+  const signUp = p.waitForResponse((response) =>
+    response.url().includes("/api/auth/sign-up/email") && response.request().method() === "POST",
+  );
   await p.getByRole("button", { name: "Create account", exact: true }).click();
+  const response = await signUp;
+  if (response.status() === 429) {
+    const retryAfter = Number(response.headers()["retry-after"] || 60);
+    await p.waitForTimeout((Number.isFinite(retryAfter) ? Math.max(retryAfter, 1) : 60) * 1000);
+    await p.getByRole("button", { name: "Create account", exact: true }).click();
+  }
   await expect(p).toHaveURL(/\/setup$/);
   await p.getByRole("link", { name: "Skip for now" }).click();
   await expect(p).toHaveURL(/\/dashboard$/);
@@ -423,7 +432,15 @@ test("milestone 4 desktop: schedules, suggestions, calendar, full payments and i
       await expect(
         a.getByText("Linked transfer deleted; payment needs review"),
       ).toBeVisible();
-      await expect(a.locator("main header")).toContainText("Upcoming");
+      const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+      const expectedStatus = today > "2026-11-05" ? "Overdue" :
+        today === "2026-11-05" ? "Due today" : "Upcoming";
+      await expect(a.locator("main header")).toContainText(expectedStatus);
     });
     await test.step("foreign reads, mutation replay and mismatched payment links are rejected", async () => {
       await register(b, emails[1]);
