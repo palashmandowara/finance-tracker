@@ -267,15 +267,19 @@ export async function confirmStatement(
           reconciled: 0,
           messages: [],
         };
-        // Rebuild financial fields from the stored upload and mapping. The browser
-        // may submit user decisions, but cannot rewrite amount/date/type/description
-        // after the preview has been shown.
+        // Rebuild source-controlled fields from the stored upload and mapping.
+        // The signed-in owner may correct editable fields in the preview; validate
+        // those values below and retain the original source reference and blocked state.
         const submitted = new Map(rows.map((row) => [row.index, row]));
         const confirmedRows = stored.rows.map((cells, index) => {
           const expected = parseStatementRow(cells, index, stored.mapping!);
           const choice = submitted.get(index);
           return {
             ...expected,
+            date: choice?.date ?? expected.date,
+            description: choice?.description ?? expected.description,
+            amount: choice?.amount ?? expected.amount,
+            type: choice?.type ?? expected.type,
             categoryId: choice?.categoryId ?? "",
             kind: choice?.kind ?? expected.kind,
             otherId: choice?.otherId ?? "",
